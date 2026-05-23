@@ -45,6 +45,14 @@ jobs:
         run: |
           git checkout upstream
           git reset --hard tailscale/main
+
+          # Remove tailscale's own workflows — we don't need them
+          # and GitHub blocks pushing foreign workflow files
+          if [ -d ".github" ]; then
+            git rm -rf .github/ --quiet
+            git commit -m "chore: remove upstream .github/ [skip ci]" || true
+          fi
+
           git push origin upstream --force
 
       - name: Detect new tags
