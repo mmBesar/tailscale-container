@@ -1,0 +1,109 @@
+name: Upstream Sync
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # daily at 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync & Detect New Tags
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure upstream branch exists
+        run: |
+          if git ls-remote --exit-code origin upstream; then
+            echo "Branch 'upstream' already exists."
+          else
+            echo "Creating 'upstream' branch from main..."
+            git checkout -b upstream
+            git push origin upstream
+            git checkout main
+          fi
+
+      - name: Add tailscale upstream remote
+        run: |
+          git remote add tailscale https://github.com/tailscale/tailscale.git || true
+          git fetch tailscale --tags --no-recurse-submodules
+
+      - name: Sync upstream branch
+        run: |
+          git checkout upstream
+          git reset --hard tailscale/main
+          git push origin upstream --force
+
+      - name: Detect new tags
+        id: detect
+        run: |
+          # All upstream version tags, newest first
+          UPSTREAM_TAGS=$(git tag --list 'v*.*.*' --sort=-version:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$')
+
+          echo "Upstream tags found:"
+          echo "$UPSTREAM_TAGS"
+
+          # Read already-built tags
+          git checkout main
+          BUILT_TAGS=$(cat built-tags.txt 2>/dev/null || echo "")
+
+          NEW_TAGS=""
+          while IFS= read -r tag; do
+            if ! echo "$BUILT_TAGS" | grep -qx "$tag"; then
+              NEW_TAGS="$NEW_TAGS $tag"
+            fi
+          done <<< "$UPSTREAM_TAGS"
+
+          NEW_TAGS=$(echo "$NEW_TAGS" | xargs)  # trim whitespace
+
+          if [ -z "$NEW_TAGS" ]; then
+            echo "No new tags found. Nothing to build."
+            echo "new_tags=" >> $GITHUB_OUTPUT
+          else
+            echo "New tags to build: $NEW_TAGS"
+            echo "new_tags=$NEW_TAGS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push new tags & update built-tags.txt
+        if: steps.detect.outputs.new_tags != ''
+        run: |
+          git checkout main
+
+          for tag in ${{ steps.detect.outputs.new_tags }}; do
+            echo "Processing tag: $tag"
+
+            # Mirror the tag from upstream into this repo
+            git tag "$tag" "tailscale/$tag" 2>/dev/null || \
+              git tag -f "$tag" "refs/tags/$tag"
+
+            # Record it as built
+            echo "$tag" >> built-tags.txt
+          done
+
+          # Sort and deduplicate the ledger
+          sort -V built-tags.txt | uniq > built-tags.tmp
+          mv built-tags.tmp built-tags.txt
+
+          # Commit the updated ledger
+          git add built-tags.txt
+          git commit -m "chore: record newly built tags [skip ci]"
+          git push origin main
+
+          # Push the mirrored tags — each push triggers container-build.yml
+          for tag in ${{ steps.detect.outputs.new_tags }}; do
+            git push origin "$tag"
+          done
