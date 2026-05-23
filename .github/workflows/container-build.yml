@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to build (e.g. v1.80.0)'
+        description: 'Tag to build (e.g. v1.98.3)'
         required: true
         type: string
 
@@ -58,7 +58,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.arch }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     needs: prepare
 
     strategy:
@@ -67,22 +67,26 @@ jobs:
         include:
           - arch: amd64
             platform: linux/amd64
+            runner: ubuntu-latest
           - arch: arm64
             platform: linux/arm64
+            runner: ubuntu-24.04-arm
           - arch: riscv64
             platform: linux/riscv64
+            runner: ubuntu-latest   # QEMU only for riscv64
 
     steps:
-      - name: Checkout upstream at tag
+      - name: Checkout repo at tag
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.version }}
           fetch-depth: 1
 
-      - name: Set up QEMU
+      - name: Set up QEMU (riscv64 only)
+        if: matrix.arch == 'riscv64'
         uses: docker/setup-qemu-action@v4
         with:
-          platforms: arm64,riscv64
+          platforms: riscv64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -149,7 +153,6 @@ jobs:
           VERSION="${{ needs.prepare.outputs.version }}"
           IS_STABLE="${{ needs.prepare.outputs.is_stable }}"
 
-          # Always include the exact version tag
           TAGS="-t ${IMAGE}:${VERSION}"
 
           if [ "$IS_STABLE" = "true" ]; then
@@ -159,7 +162,6 @@ jobs:
           fi
 
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
-          echo "Tagging as: $TAGS"
 
       - name: Create and push multi-arch manifest
         run: |
