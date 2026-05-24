@@ -76,10 +76,10 @@ jobs:
             runner: ubuntu-latest   # QEMU only for riscv64
 
     steps:
-      - name: Checkout repo at tag
+      - name: Checkout upstream branch (contains Dockerfile)
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.prepare.outputs.version }}
+          ref: upstream
           fetch-depth: 1
 
       - name: Set up QEMU (riscv64 only)
