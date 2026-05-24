@@ -73,7 +73,7 @@ jobs:
             runner: ubuntu-24.04-arm
           - arch: riscv64
             platform: linux/riscv64
-            runner: ubuntu-latest   # QEMU only for riscv64
+            runner: ubuntu-24.04-riscv
 
     steps:
       - name: Checkout upstream branch (contains Dockerfile)
@@ -81,12 +81,6 @@ jobs:
         with:
           ref: upstream
           fetch-depth: 1
-
-      - name: Set up QEMU (riscv64 only)
-        if: matrix.arch == 'riscv64'
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: riscv64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -106,8 +100,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           outputs: type=image,name=${{ needs.prepare.outputs.image }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          cache-from: type=registry,ref=${{ needs.prepare.outputs.image }}:cache-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ needs.prepare.outputs.image }}:cache-${{ matrix.arch }},mode=max
 
       - name: Export digest
         run: |
