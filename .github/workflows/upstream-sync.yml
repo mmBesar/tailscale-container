@@ -105,14 +105,13 @@ jobs:
           git commit -m "chore: record newly built tags [skip ci]"
           git push origin main
 
-          # Directly trigger container-build.yml for each new tag via workflow_dispatch.
-          # More reliable than tag pushes — GITHUB_TOKEN is sufficient for API calls.
+          # Push tags via PAT so GitHub treats it as a human push and triggers
+          # container-build.yml. GITHUB_TOKEN pushes do not trigger other workflows.
+          CLEAN_HEAD=$(git rev-parse origin/main)
+
           for tag in ${{ steps.detect.outputs.new_tags }}; do
-            echo "Triggering container build for: $tag"
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/${{ github.repository }}/actions/workflows/container-build.yml/dispatches \
-              -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"$tag\"}}"
+            echo "Pushing tag: $tag -> $CLEAN_HEAD"
+            git tag -f "$tag" "$CLEAN_HEAD"
+            git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git "$tag"
             sleep 2
           done
