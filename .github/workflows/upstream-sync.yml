@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure git
         run: |
@@ -113,7 +113,7 @@ jobs:
           for tag in ${{ steps.detect.outputs.new_tags }}; do
             echo "Pushing tag: $tag → $CLEAN_HEAD"
             git tag -f "$tag" "$CLEAN_HEAD"
-            git push origin "$tag"
+            git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git "$tag"
             # Small delay to avoid hammering the Actions queue
             sleep 2
           done
