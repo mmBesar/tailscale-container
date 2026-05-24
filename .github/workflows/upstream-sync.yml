@@ -105,9 +105,10 @@ jobs:
           git commit -m "chore: record newly built tags [skip ci]"
           git push origin main
 
-          # Tags must point to OUR clean upstream HEAD, not the upstream commit
-          # (upstream commits contain .github/workflows/ which GitHub blocks)
-          CLEAN_HEAD=$(git rev-parse origin/upstream)
+          # Tags must point to main — GitHub looks at the tagged commit for workflow
+          # files, so if we tag upstream (which has no .github/), no workflow runs.
+          # main has our container-build.yml, so tagging it triggers the build correctly.
+          CLEAN_HEAD=$(git rev-parse origin/main)
 
           for tag in ${{ steps.detect.outputs.new_tags }}; do
             echo "Pushing tag: $tag → $CLEAN_HEAD"
