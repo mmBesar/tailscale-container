@@ -105,15 +105,14 @@ jobs:
           git commit -m "chore: record newly built tags [skip ci]"
           git push origin main
 
-          # Tags must point to main — GitHub looks at the tagged commit for workflow
-          # files, so if we tag upstream (which has no .github/), no workflow runs.
-          # main has our container-build.yml, so tagging it triggers the build correctly.
-          CLEAN_HEAD=$(git rev-parse origin/main)
-
+          # Directly trigger container-build.yml for each new tag via workflow_dispatch.
+          # More reliable than tag pushes — GITHUB_TOKEN is sufficient for API calls.
           for tag in ${{ steps.detect.outputs.new_tags }}; do
-            echo "Pushing tag: $tag → $CLEAN_HEAD"
-            git tag -f "$tag" "$CLEAN_HEAD"
-            git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git "$tag"
-            # Small delay to avoid hammering the Actions queue
+            echo "Triggering container build for: $tag"
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/${{ github.repository }}/actions/workflows/container-build.yml/dispatches \
+              -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"$tag\"}}"
             sleep 2
           done
