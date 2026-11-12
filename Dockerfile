@@ -13,6 +13,13 @@
 # ---- build stage --------------------------------------------------------
 FROM golang:alpine AS build-env
 
+# The golang image ships with GOTOOLCHAIN=local, which refuses to build when
+# go.mod requires a newer Go than the image has (this happens for a day or two
+# after every Go release, e.g. "go.mod requires go >= 1.27.4 (running go 1.27.3)").
+# GOTOOLCHAIN=auto lets Go download exactly the version go.mod asks for from
+# the official Go toolchain proxy, which publishes linux/riscv64 too.
+ENV GOTOOLCHAIN=auto
+
 RUN apk add --no-cache git curl
 
 WORKDIR /go/src/tailscale
